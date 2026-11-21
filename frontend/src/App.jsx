@@ -1,8 +1,13 @@
+
 import { useEffect, useRef, useState } from "react";
 import FoodShowcase from "./components/FoodShowcase";
 import ChatPanel from "./components/ChatPanel";
 import { FOODS, formatPrice } from "./data/foods";
-import { sendChatMessage } from "./services/chatService";
+import {
+  sendChatMessage,
+  initializePayment,
+  verifyPayment,
+} from "./services/chatService";
 import "./App.css";
 
 const INTERVAL = 2000;
@@ -11,10 +16,12 @@ export default function App() {
   const [tick, setTick] = useState(0);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [paymentRequired, setPaymentRequired] = useState(false);
 
   const chatInput = useRef(null);
   const chatWrap = useRef(null);
   const welcomeRequested = useRef(false);
+  const paymentCallbackHandled = useRef(false);
 
   const foodCount = FOODS.length;
   const food = FOODS[tick % foodCount];
@@ -33,8 +40,8 @@ export default function App() {
           {
             id: Date.now(),
             sender: "bot",
-            text: reply
-          }
+            text: reply,
+          },
         ]);
       } catch (error) {
         setMessages([
@@ -42,8 +49,8 @@ export default function App() {
             id: Date.now(),
             sender: "bot",
             text: error.message,
-            error: true
-          }
+            error: true,
+          },
         ]);
       } finally {
         setLoading(false);
@@ -51,6 +58,73 @@ export default function App() {
     };
 
     loadWelcomeMessage();
+  }, []);
+
+  // Verify payment when Paystack redirects the customer back.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("payment") !== "callback") return;
+    if (paymentCallbackHandled.current) return;
+
+    paymentCallbackHandled.current = true;
+
+    const reference = params.get("reference");
+
+    // Remove payment details from the browser address bar.
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    );
+
+    const checkPayment = async () => {
+      setLoading(true);
+
+      if (!reference) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: Date.now(),
+            sender: "bot",
+            text: "We couldn't find your payment reference. Please contact the restaurant.",
+            error: true,
+          },
+        ]);
+
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const result = await verifyPayment(reference);
+
+        setPaymentRequired(false);
+
+        setMessages((current) => [
+          ...current,
+          {
+            id: Date.now() + 1,
+            sender: "bot",
+            text: result.message,
+          },
+        ]);
+      } catch (error) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: Date.now() + 1,
+            sender: "bot",
+            text: error.message,
+            error: true,
+          },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkPayment();
   }, []);
 
   // Rotate food images every two seconds.
@@ -70,7 +144,7 @@ export default function App() {
   const startOrder = () => {
     chatWrap.current?.scrollIntoView({
       behavior: "smooth",
-      block: "center"
+      block: "center",
     });
 
     chatInput.current?.focus({ preventScroll: true });
@@ -81,7 +155,7 @@ export default function App() {
     const userMessage = {
       id: Date.now(),
       sender: "user",
-      text: message
+      text: message,
     };
 
     setMessages((current) => [...current, userMessage]);
@@ -95,9 +169,19 @@ export default function App() {
         {
           id: Date.now() + 1,
           sender: "bot",
-          text: reply
-        }
+          text: reply,
+        },
       ]);
+
+      // Show the payment email form after checkout.
+      if (
+        message.trim() === "99" &&
+        reply.includes("Please proceed to payment.")
+      ) {
+        setPaymentRequired(true);
+      } else if (message.trim() === "0") {
+        setPaymentRequired(false);
+      }
     } catch (error) {
       setMessages((current) => [
         ...current,
@@ -105,10 +189,33 @@ export default function App() {
           id: Date.now() + 1,
           sender: "bot",
           text: error.message,
-          error: true
-        }
+          error: true,
+        },
       ]);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initialize payment and redirect the customer to Paystack.
+  const handlePayment = async (email) => {
+    setLoading(true);
+
+    try {
+      const result = await initializePayment(email);
+
+      window.location.assign(result.authorizationUrl);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 1,
+          sender: "bot",
+          text: error.message,
+          error: true,
+        },
+      ]);
+
       setLoading(false);
     }
   };
@@ -194,6 +301,8 @@ export default function App() {
             inputRef={chatInput}
             messages={messages}
             onSend={handleSend}
+            onPay={handlePayment}
+            paymentRequired={paymentRequired}
             loading={loading}
           />
         </section>

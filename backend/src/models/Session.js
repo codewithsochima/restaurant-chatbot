@@ -16,7 +16,13 @@ const sessionSchema = new mongoose.Schema(
 
     conversationState: {
       type: String,
-      enum: ["main_menu", "selecting_item", "awaiting_quantity"],
+      enum: [
+        "main_menu",
+        "selecting_item",
+        "awaiting_quantity",
+        "awaiting_email",
+        "awaiting_payment",
+      ],
       default: "main_menu",
     },
 
