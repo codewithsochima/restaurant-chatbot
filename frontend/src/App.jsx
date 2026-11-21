@@ -1,122 +1,203 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useRef, useState } from "react";
+import FoodShowcase from "./components/FoodShowcase";
+import ChatPanel from "./components/ChatPanel";
+import { FOODS, formatPrice } from "./data/foods";
+import { sendChatMessage } from "./services/chatService";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
+const INTERVAL = 2000;
+
+export default function App() {
+  const [tick, setTick] = useState(0);
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const chatInput = useRef(null);
+  const chatWrap = useRef(null);
+  const welcomeRequested = useRef(false);
+
+  const foodCount = FOODS.length;
+  const food = FOODS[tick % foodCount];
+
+  // Automatically welcome the customer when FoodBot opens.
+  useEffect(() => {
+    if (welcomeRequested.current) return;
+
+    welcomeRequested.current = true;
+
+    const loadWelcomeMessage = async () => {
+      try {
+        const reply = await sendChatMessage("WELCOME");
+
+        setMessages([
+          {
+            id: Date.now(),
+            sender: "bot",
+            text: reply
+          }
+        ]);
+      } catch (error) {
+        setMessages([
+          {
+            id: Date.now(),
+            sender: "bot",
+            text: error.message,
+            error: true
+          }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadWelcomeMessage();
+  }, []);
+
+  // Rotate food images every two seconds.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick((current) => (current + 1) % foodCount);
+    }, INTERVAL);
+
+    return () => clearInterval(timer);
+  }, [foodCount]);
+
+  const selectFood = (index) => {
+    setTick(index);
+  };
+
+  // Scroll to the chatbot when the customer starts ordering.
+  const startOrder = () => {
+    chatWrap.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+
+    chatInput.current?.focus({ preventScroll: true });
+  };
+
+  // Send customer messages to the backend.
+  const handleSend = async (message) => {
+    const userMessage = {
+      id: Date.now(),
+      sender: "user",
+      text: message
+    };
+
+    setMessages((current) => [...current, userMessage]);
+    setLoading(true);
+
+    try {
+      const reply = await sendChatMessage(message);
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 1,
+          sender: "bot",
+          text: reply
+        }
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 1,
+          sender: "bot",
+          text: error.message,
+          error: true
+        }
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app">
+      <header className="header">
+        <span className="brand">FOODBOT</span>
 
-      <div className="ticks"></div>
+        <nav className="chips">
+          <span className="on">Explore our menu</span>
+          <span>Freshly prepared</span>
+          <span>Simple ordering</span>
+          <span>Secure payments</span>
+        </nav>
+      </header>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
+      <main className="stage">
+        <section className="intro">
+          <svg
+            className="blob"
+            viewBox="0 0 600 800"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <path d="M0 0H430C470 40 560 20 580 100C600 180 520 200 540 280C560 360 600 400 540 470C480 540 420 520 400 600C380 680 300 760 200 740C120 725 80 700 0 720Z" />
           </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+          <div className="intro-body">
+            <h1>Delicious meals. Easy ordering.</h1>
+
+            <p className="lead">
+              Discover delicious meals, explore our menu and
+              place your order through our smart restaurant
+              assistant. Your next favourite meal is just a
+              conversation away.
+            </p>
+
+            <h2>
+              {food.name}
+              <span>({formatPrice(food.price)})</span>
+            </h2>
+
+            <p className="small">{food.description}</p>
+
+            <div className="thumbs">
+              {FOODS.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={item.id === food.id ? "on" : ""}
+                  onClick={() => selectFood(index)}
+                  aria-label={`Show ${item.name}`}
+                  title={item.name}
+                >
+                  {item.image ? (
+                    <img src={item.image} alt={item.name} />
+                  ) : (
+                    <span>🍽️</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <span className="pill">Click to Select Food ↑</span>
+          </div>
+        </section>
+
+        <section className="showcase-wrap">
+          <FoodShowcase foods={FOODS} tick={tick} />
+
+          <button
+            type="button"
+            className="cta"
+            onClick={startOrder}
+          >
+            Start Your Order
+          </button>
+        </section>
+
+        <section className="chat-wrap" ref={chatWrap}>
+          <ChatPanel
+            inputRef={chatInput}
+            messages={messages}
+            onSend={handleSend}
+            loading={loading}
+          />
+        </section>
+      </main>
+    </div>
+  );
 }
-
-export default App

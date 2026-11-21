@@ -199,6 +199,11 @@ const processMessage = async (deviceId, message) => {
     session = await Session.create({ deviceId });
   }
 
+  // Send the welcome menu when the frontend requests it
+  if (userMessage.toUpperCase() === "WELCOME") {
+    return getMainMenu();
+  }
+
   // Handle cancellation at any conversation stage
   if (userMessage === "0") {
     return await cancelOrder(session);
