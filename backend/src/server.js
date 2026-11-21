@@ -4,6 +4,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const connectDB = require("./config/db");
+const chatRoutes = require("./routes/chatRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -11,14 +12,16 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Test route
+// Main API route
 app.get("/", (req, res) => {
   res.json({
     message: "Restaurant ChatBot API is running!",
   });
 });
 
-// Start server after connecting to MongoDB
+// Chatbot routes
+app.use("/api/chat", chatRoutes);
+
 const startServer = async () => {
   await connectDB();
 
