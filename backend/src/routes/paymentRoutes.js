@@ -8,11 +8,25 @@ const Session = require("../models/Session");
 
 const router = express.Router();
 
-const PAYSTACK_URL = "https://api.paystack.co";
+const PAYSTACK_BASE_URL = "https://api.paystack.co";
 
-// Initialize a Paystack transaction
+const getPaystackHeaders = () => {
+  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+
+  if (!secretKey) {
+    throw new Error("Paystack secret key is not configured.");
+  }
+
+  return {
+    Authorization: `Bearer ${secretKey}`,
+    "Content-Type": "application/json",
+  };
+};
+
+// Initialize Paystack payment
 router.post("/initialize", async (req, res) => {
-  let reference;
+  let order = null;
+  let reference = null;
 
   try {
     const { deviceId, email } = req.body;
@@ -20,38 +34,31 @@ router.post("/initialize", async (req, res) => {
     if (!deviceId || !email) {
       return res.status(400).json({
         success: false,
-        message: "Device ID and email are required.",
+        message: "Device ID and email address are required.",
       });
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(email)) {
       return res.status(400).json({
         success: false,
-        message: "Please enter a valid email address.",
+        message: "Please provide a valid email address.",
       });
     }
 
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
-
-    if (!secretKey) {
-      return res.status(500).json({
-        success: false,
-        message: "Paystack has not been configured on the server.",
-      });
-    }
-
-    // Find this customer's session.
+    // Find the customer's session
     const session = await Session.findOne({ deviceId });
 
     if (!session) {
       return res.status(404).json({
         success: false,
-        message: "Customer session could not be found.",
+        message: "Customer session not found.",
       });
     }
 
-    // Find this customer's latest order awaiting payment.
-    const order = await Order.findOne({
+    // Find the customer's latest unpaid placed order
+    order = await Order.findOne({
       session: session._id,
       status: "placed",
       paymentStatus: "pending",
@@ -60,17 +67,18 @@ router.post("/initialize", async (req, res) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: "No order awaiting payment was found.",
+        message: "No unpaid order was found. Please place an order first.",
       });
     }
 
-    if (!order.items.length || order.totalAmount <= 0) {
+    if (order.totalAmount <= 0) {
       return res.status(400).json({
         success: false,
-        message: "This order cannot be paid for.",
+        message: "Invalid order amount.",
       });
     }
 
+    // Generate a unique payment reference
     reference = `foodbot_${Date.now()}_${crypto
       .randomBytes(6)
       .toString("hex")}`;
@@ -78,14 +86,18 @@ router.post("/initialize", async (req, res) => {
     order.paymentReference = reference;
     await order.save();
 
-    const callbackUrl = `${
+    // Use the deployed frontend URL in production
+    const frontendUrl = (
       process.env.FRONTEND_URL || "http://localhost:5173"
-    }/?payment=callback`;
+    ).replace(/\/+$/, "");
 
+    const callbackUrl = `${frontendUrl}/?payment=callback`;
+
+    // Initialize transaction with Paystack
     const response = await axios.post(
-      `${PAYSTACK_URL}/transaction/initialize`,
+      `${PAYSTACK_BASE_URL}/transaction/initialize`,
       {
-        email,
+        email: email.trim(),
         amount: Math.round(order.totalAmount * 100),
         currency: "NGN",
         reference,
@@ -93,27 +105,26 @@ router.post("/initialize", async (req, res) => {
         metadata: {
           deviceId,
           orderId: order._id.toString(),
-          customerEmail: email,
+          email: email.trim(),
         },
       },
       {
-        headers: {
-          Authorization: `Bearer ${secretKey}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 15000,
+        headers: getPaystackHeaders(),
       }
     );
 
-    if (!response.data.status || !response.data.data.authorization_url) {
+    if (
+      !response.data.status ||
+      !response.data.data.authorization_url
+    ) {
       throw new Error("Paystack could not initialize the transaction.");
     }
 
     return res.status(200).json({
       success: true,
-      authorizationUrl: response.data.data.authorization_url,
-      reference,
       message: "Payment initialized successfully.",
+      authorizationUrl: response.data.data.authorization_url,
+      reference: response.data.data.reference,
     });
   } catch (error) {
     console.error(
@@ -121,12 +132,11 @@ router.post("/initialize", async (req, res) => {
       error.response?.data || error.message
     );
 
-    if (reference) {
-      await Order.updateOne(
-        { paymentReference: reference, paymentStatus: "pending" },
-        { $set: { paymentReference: null } }
-      ).catch((updateError) => {
-        console.error("Could not reset payment reference:", updateError.message);
+    // Clear the unused reference if initialization failed
+    if (order && reference && order.paymentReference === reference) {
+      order.paymentReference = null;
+      await order.save().catch((saveError) => {
+        console.error("Could not reset payment reference:", saveError);
       });
     }
 
@@ -134,12 +144,13 @@ router.post("/initialize", async (req, res) => {
       success: false,
       message:
         error.response?.data?.message ||
+        error.message ||
         "Unable to initialize payment. Please try again.",
     });
   }
 });
 
-// Verify a Paystack transaction
+// Verify Paystack payment
 router.post("/verify", async (req, res) => {
   try {
     const { deviceId, reference } = req.body;
@@ -147,30 +158,34 @@ router.post("/verify", async (req, res) => {
     if (!deviceId || !reference) {
       return res.status(400).json({
         success: false,
+        paid: false,
         message: "Device ID and payment reference are required.",
       });
     }
 
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
-
-    if (!secretKey) {
-      return res.status(500).json({
-        success: false,
-        message: "Paystack has not been configured on the server.",
-      });
-    }
-
+    // Find the order using its payment reference
     const order = await Order.findOne({
       paymentReference: reference,
     }).populate("session");
 
-    if (!order || !order.session || order.session.deviceId !== deviceId) {
+    if (!order || !order.session) {
       return res.status(404).json({
         success: false,
-        message: "Payment order could not be found.",
+        paid: false,
+        message: "Payment order not found.",
       });
     }
 
+    // Make sure the payment belongs to this customer
+    if (order.session.deviceId !== deviceId) {
+      return res.status(403).json({
+        success: false,
+        paid: false,
+        message: "You are not authorized to verify this payment.",
+      });
+    }
+
+    // Avoid verifying an already completed payment again
     if (order.paymentStatus === "paid") {
       return res.status(200).json({
         success: true,
@@ -180,51 +195,59 @@ router.post("/verify", async (req, res) => {
       });
     }
 
-    const response = await axios.get(
-      `${PAYSTACK_URL}/transaction/verify/${encodeURIComponent(reference)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${secretKey}`,
-        },
-        timeout: 15000,
-      }
-    );
-
-    const transaction = response.data.data;
-    const expectedAmount = Math.round(order.totalAmount * 100);
-
-    const paymentIsValid =
-      response.data.status === true &&
-      transaction.status === "success" &&
-      transaction.reference === reference &&
-      transaction.amount === expectedAmount &&
-      transaction.currency === "NGN";
-
-    if (!paymentIsValid) {
-      if (
-        transaction.status === "failed" ||
-        transaction.status === "abandoned"
-      ) {
-        order.paymentStatus = "failed";
-        await order.save();
-      }
-
+    if (order.paymentStatus !== "pending") {
       return res.status(400).json({
         success: false,
         paid: false,
-        message:
-          "Payment has not been confirmed. If you completed payment, please contact the restaurant.",
+        message: "This order is not awaiting payment.",
       });
     }
 
+    // Verify transaction directly with Paystack
+    const response = await axios.get(
+      `${PAYSTACK_BASE_URL}/transaction/verify/${encodeURIComponent(reference)}`,
+      {
+        headers: getPaystackHeaders(),
+      }
+    );
+
+    const payment = response.data.data;
+
+    // Confirm that Paystack reports a successful transaction
+    if (
+      !response.data.status ||
+      payment.status !== "success" ||
+      payment.reference !== reference
+    ) {
+      return res.status(400).json({
+        success: false,
+        paid: false,
+        message: "Payment was not successful. Please try again.",
+      });
+    }
+
+    // Verify the amount paid
+    const expectedAmount = Math.round(order.totalAmount * 100);
+
+    if (
+      payment.amount !== expectedAmount ||
+      payment.currency !== "NGN"
+    ) {
+      return res.status(400).json({
+        success: false,
+        paid: false,
+        message: "Payment amount could not be verified.",
+      });
+    }
+
+    // Update order payment status
     order.paymentStatus = "paid";
     await order.save();
 
     return res.status(200).json({
       success: true,
       paid: true,
-      message:
-        "Payment successful! 🎉 Your order has been confirmed. Thank you for ordering with FoodBot!",
+      message: "Payment successful! Your order has been confirmed. Thank you for ordering with FoodBot! 🎉",
       orderTotal: order.totalAmount,
     });
   } catch (error) {
@@ -235,7 +258,10 @@ router.post("/verify", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to verify your payment right now. Please try again.",
+      paid: false,
+      message:
+        error.response?.data?.message ||
+        "Unable to verify payment. Please try again.",
     });
   }
 });
