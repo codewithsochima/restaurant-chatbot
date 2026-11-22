@@ -11,9 +11,15 @@
   --sans: "Inter", system-ui, sans-serif;
 }
 
+/* GLOBAL */
 * {
   box-sizing: border-box;
   margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -38,7 +44,6 @@ button {
 }
 
 /* HEADER */
-
 .header {
   position: absolute;
   inset: 0 0 auto 0;
@@ -76,15 +81,16 @@ button {
 }
 
 /* MAIN LAYOUT */
-
 .stage {
   display: grid;
-  grid-template-columns: minmax(340px, 0.95fr) minmax(380px, 1.2fr) 380px;
+  grid-template-columns:
+    minmax(340px, 0.95fr)
+    minmax(380px, 1.2fr)
+    380px;
   min-height: 100vh;
 }
 
 /* INTRODUCTION */
-
 .intro {
   position: relative;
   padding: 110px 36px 48px 40px;
@@ -143,7 +149,6 @@ h1 {
 }
 
 /* FOOD THUMBNAILS */
-
 .thumbs {
   display: flex;
   flex-wrap: wrap;
@@ -163,7 +168,7 @@ h1 {
   display: grid;
   place-items: center;
   font-size: 1.3rem;
-  transition: transform 0.2s;
+  transition: transform 0.2s, border-color 0.2s;
 }
 
 .thumbs button img {
@@ -192,7 +197,9 @@ h1 {
   border-radius: 8px;
 }
 
-/* 3D FOOD SHOWCASE */
+/* ========================================
+   PREMIUM 3D FOOD CAROUSEL
+======================================== */
 
 .showcase-wrap {
   position: relative;
@@ -200,43 +207,65 @@ h1 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 34px;
+  gap: 25px;
   padding: 90px 0 40px;
   min-width: 0;
+  overflow: visible;
 }
 
 .showcase {
-  --p: clamp(230px, 25vw, 380px);
-  --r: calc(var(--p) * 0.9);
+  --p: clamp(240px, 27vw, 390px);
+  --r: calc(var(--p) * 1.05);
 
   position: relative;
   width: 100%;
   height: calc(var(--p) * 1.2);
   display: grid;
   place-items: center;
-  perspective: 1500px;
-  overflow: hidden;
+  perspective: 1600px;
+  perspective-origin: 50% 45%;
+  overflow: visible;
+  isolation: isolate;
 }
 
-.backdrop {
+/* Ambient orange glow */
+.showcase-glow {
   position: absolute;
-  width: calc(var(--p) * 1.15);
+  width: calc(var(--p) * 1.45);
   aspect-ratio: 1;
   border-radius: 50%;
-  background: var(--paper);
-  right: 2%;
-  bottom: -4%;
+  background: radial-gradient(
+    circle,
+    rgba(245, 165, 36, 0.20) 0%,
+    rgba(245, 165, 36, 0.08) 35%,
+    rgba(20, 22, 31, 0) 72%
+  );
+  filter: blur(12px);
+  pointer-events: none;
 }
 
+/* Subtle 3D orbit */
+.showcase-orbit {
+  position: absolute;
+  width: calc(var(--p) * 1.25);
+  aspect-ratio: 1;
+  border: 1px solid rgba(245, 165, 36, 0.13);
+  border-radius: 50%;
+  transform: rotateX(68deg);
+  pointer-events: none;
+}
+
+/* Rotating dashed decoration */
 .arc {
   position: absolute;
-  width: calc(var(--p) * 1.22);
+  width: calc(var(--p) * 1.32);
   aspect-ratio: 1;
-  border: 4px dashed var(--orange);
+  border: 3px dashed rgba(245, 165, 36, 0.8);
   border-radius: 50%;
   mask: conic-gradient(#000 0 28%, transparent 0);
   -webkit-mask: conic-gradient(#000 0 28%, transparent 0);
-  animation: spin 16s linear infinite;
+  animation: spin 22s linear infinite;
+  pointer-events: none;
 }
 
 @keyframes spin {
@@ -245,56 +274,127 @@ h1 {
   }
 }
 
+/* Main rotating 3D scene */
 .scene {
   position: relative;
   width: var(--p);
   height: var(--p);
   transform-style: preserve-3d;
-  transition: transform 1s cubic-bezier(.65, 0, .25, 1);
+  transition: transform 1.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
 }
 
+/* Individual food plates */
 .plate {
   position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  overflow: hidden;
-  background: radial-gradient(circle at 35% 30%, #fff, #e6e6ea 70%);
-  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
-  transition: opacity 0.8s ease;
-}
-
-.ph {
-  position: absolute;
-  inset: 0;
+  inset: 8%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  color: var(--ink);
-  text-align: center;
-  padding: 10%;
+  border-radius: 50%;
+  padding: 12px;
+
+  background: radial-gradient(
+    circle at 35% 25%,
+    #ffffff 0%,
+    #f4f1e9 65%,
+    #d7d1c5 100%
+  );
+
+  border: 7px solid rgba(255, 255, 255, 0.95);
+
+  box-shadow:
+    0 28px 55px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 2px rgba(20, 22, 31, 0.06),
+    inset 0 0 18px rgba(0, 0, 0, 0.08);
+
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition: opacity 0.9s ease;
+  transform-origin: center;
 }
 
-/* FOOD PHOTOGRAPHS */
+.plate.active-plate {
+  box-shadow:
+    0 35px 70px rgba(0, 0, 0, 0.5),
+    0 0 35px rgba(245, 165, 36, 0.13),
+    inset 0 0 0 2px rgba(20, 22, 31, 0.05);
+}
 
-.ph img {
+/* Food photography */
+.plate-inner {
   width: 100%;
-  height: 80%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: #eeeae1;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.12);
+}
+
+.plate-inner img {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   display: block;
+  transition: transform 0.5s ease;
 }
 
-.ph span {
-  font-size: clamp(3rem, 7vw, 5rem);
+.active-plate .plate-inner img {
+  transform: scale(1.04);
 }
 
-.ph b {
-  font-size: 1.2rem;
+.food-placeholder {
+  font-size: 4rem;
+}
+
+/* Food name label */
+.plate-label {
+  position: absolute;
+  bottom: 13%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 7px 14px;
+  border-radius: 30px;
+  background: rgba(20, 22, 31, 0.88);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Carousel caption */
+.carousel-caption {
+  position: absolute;
+  bottom: 2%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.carousel-caption div {
+  width: 24px;
+  height: 2px;
+  background: var(--orange);
+  border-radius: 5px;
 }
 
 /* ORDER BUTTON */
-
 .cta {
   background: #fff;
   color: var(--ink);
@@ -312,7 +412,9 @@ h1 {
   box-shadow: 0 8px 24px rgba(255, 255, 255, 0.2);
 }
 
-/* CHATBOT */
+/* ========================================
+   CHATBOT
+======================================== */
 
 .chat-wrap {
   padding: 80px 24px 24px 0;
@@ -448,7 +550,6 @@ h1 {
 }
 
 /* QUICK COMMANDS */
-
 .quick {
   display: flex;
   flex-wrap: wrap;
@@ -483,7 +584,6 @@ h1 {
 }
 
 /* CHAT INPUT */
-
 .chat-form {
   display: flex;
   gap: 8px;
@@ -515,7 +615,9 @@ h1 {
   font-weight: 700;
 }
 
-/* PREMIUM PAYMENT SECTION */
+/* ========================================
+   PREMIUM PAYMENT SECTION
+======================================== */
 
 .payment-box {
   position: relative;
@@ -523,6 +625,7 @@ h1 {
   padding: 18px;
   flex-shrink: 0;
   overflow: hidden;
+
   background:
     radial-gradient(
       circle at 100% 0%,
@@ -530,6 +633,7 @@ h1 {
       transparent 45%
     ),
     linear-gradient(145deg, #292e40, #202433);
+
   border: 1px solid rgba(245, 165, 36, 0.32);
   border-radius: 18px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
@@ -652,7 +756,9 @@ h1 {
   font-weight: 800;
 }
 
-/* TABLET AND MOBILE */
+/* ========================================
+   TABLET
+======================================== */
 
 @media (max-width: 1100px) {
   .stage {
@@ -676,7 +782,27 @@ h1 {
   }
 
   .showcase-wrap {
-    padding: 20px 0 24px;
+    padding: 25px 0 30px;
+    gap: 18px;
+  }
+
+  .showcase {
+    --p: clamp(210px, 52vw, 290px);
+    --r: calc(var(--p) * 1.05);
+    height: calc(var(--p) * 1.2);
+    perspective: 1200px;
+  }
+
+  .scene {
+    transition-duration: 1.8s;
+  }
+
+  .arc {
+    width: calc(var(--p) * 1.3);
+  }
+
+  .showcase-orbit {
+    width: calc(var(--p) * 1.2);
   }
 
   .chat-wrap {
@@ -691,6 +817,82 @@ h1 {
   }
 }
 
+/* ========================================
+   MOBILE
+======================================== */
+
+@media (max-width: 600px) {
+  .header {
+    padding: 18px;
+  }
+
+  .brand {
+    font-size: 1.4rem;
+  }
+
+  .intro {
+    padding: 85px 20px 25px;
+  }
+
+  .intro h1 {
+    font-size: clamp(2rem, 9vw, 2.7rem);
+  }
+
+  .lead {
+    font-size: 0.85rem;
+  }
+
+  .showcase-wrap {
+    padding: 25px 0 30px;
+  }
+
+  .showcase {
+    --p: clamp(195px, 66vw, 250px);
+    --r: calc(var(--p) * 1.05);
+    height: calc(var(--p) * 1.22);
+    perspective: 1100px;
+  }
+
+  .scene {
+    width: var(--p);
+    height: var(--p);
+  }
+
+  .plate {
+    border-width: 5px;
+    padding: 8px;
+  }
+
+  .plate-label {
+    bottom: 12%;
+    font-size: 0.6rem;
+    padding: 6px 10px;
+  }
+
+  .arc {
+    border-width: 2px;
+  }
+
+  .carousel-caption {
+    bottom: 0;
+    font-size: 0.5rem;
+  }
+
+  .cta {
+    font-size: 1rem;
+    padding: 11px 28px;
+  }
+
+  .chat-wrap {
+    padding: 0 12px 18px;
+  }
+
+  .chat {
+    min-height: 460px;
+  }
+}
+
+/* SMALL MOBILE */
 @media (max-width: 420px) {
   .payment-box {
     padding: 15px;
@@ -703,71 +905,41 @@ h1 {
   .payment-input button {
     width: 100%;
   }
+
+  .showcase {
+    --p: 185px;
+    --r: calc(var(--p) * 1.05);
+    height: 235px;
+  }
+
+  .plate {
+    border-width: 4px;
+  }
+
+  .intro {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .chat-wrap {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
 
 /* ACCESSIBILITY */
-
 @media (prefers-reduced-motion: reduce) {
   .scene,
   .plate,
+  .plate-inner img,
   .thumbs button,
   .cta {
     transition: none;
   }
 
   .arc,
-  .payment-box {
+  .payment-box,
+  .typing i {
     animation: none;
-  }
-}
-
-/* MOBILE 3D FOOD CAROUSEL FIX */
-@media (max-width: 1100px) {
-  .showcase-wrap {
-    overflow: visible;
-  }
-
-  .showcase {
-    --p: clamp(180px, 48vw, 230px);
-    --r: calc(var(--p) * 0.9);
-
-    width: 100%;
-    height: calc(var(--p) * 1.3);
-    perspective: 1000px;
-    overflow: visible;
-  }
-
-  .scene {
-    width: var(--p);
-    height: var(--p);
-    transform-style: preserve-3d;
-    transition: transform 1s cubic-bezier(.65, 0, .25, 1);
-  }
-
-  .plate {
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-  }
-
-  .ph img {
-    width: 100%;
-    height: 80%;
-    object-fit: contain;
-  }
-
-  .arc {
-    width: calc(var(--p) * 1.2);
-  }
-
-  .backdrop {
-    width: calc(var(--p) * 1.1);
-  }
-}
-
-@media (max-width: 420px) {
-  .showcase {
-    --p: 180px;
-    --r: 162px;
-    height: 240px;
   }
 }

@@ -5,13 +5,16 @@ export default function FoodShowcase({ foods, tick }) {
 
   return (
     <div className="showcase">
+      {/* Decorative glow instead of the empty white circle */}
+      <div className="showcase-glow" />
+      <div className="showcase-orbit" />
       <div className="arc" />
-      <div className="backdrop" />
 
+      {/* 3D rotating food carousel */}
       <div
         className="scene"
         style={{
-          transform: `translateZ(calc(var(--r) * -1)) rotateY(${-tick * angle}deg)`
+          transform: `translateZ(calc(var(--r) * -1)) rotateY(${-tick * angle}deg)`,
         }}
       >
         {foods.map((food, index) => {
@@ -22,30 +25,50 @@ export default function FoodShowcase({ foods, tick }) {
             distance -= totalFoods;
           }
 
+          const absDistance = Math.abs(distance);
+
           const opacity =
-            distance === 0 ? 1 :
-            Math.abs(distance) === 1 ? 0.35 : 0;
+            absDistance === 0 ? 1 :
+            absDistance === 1 ? 0.78 :
+            absDistance === 2 ? 0.16 : 0.035;
+
+          const scale =
+            absDistance === 0 ? 1 :
+            absDistance === 1 ? 0.78 :
+            0.65;
 
           return (
             <div
               key={food.id}
-              className="plate"
+              className={`plate ${absDistance === 0 ? "active-plate" : ""}`}
               style={{
-                transform: `rotateY(${index * angle}deg) translateZ(var(--r))`,
-                opacity
+                transform: `
+                  rotateY(${index * angle}deg)
+                  translateZ(var(--r))
+                  scale(${scale})
+                `,
+                opacity,
               }}
             >
-              <div className="ph">
+              <div className="plate-inner">
                 {food.image ? (
                   <img src={food.image} alt={food.name} />
                 ) : (
-                  <span>Image coming soon</span>
+                  <div className="food-placeholder">🍽️</div>
                 )}
-                <b>{food.name}</b>
+              </div>
+
+              <div className="plate-label">
+                {food.name}
               </div>
             </div>
           );
         })}
+      </div>
+
+      <div className="carousel-caption">
+        <span>FRESHLY PREPARED</span>
+        <div />
       </div>
     </div>
   );
